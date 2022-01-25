@@ -1,0 +1,58 @@
+name: Vue.js CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: yarn test:unit
+
+    build:
+      runs-on: ubuntu-latest
+
+        strategy:
+          matrix:
+            node-version: [ 12.x, 14.x, 16.x ]
+
+        steps:
+          - uses: actions/checkout@v2
+          - name: Use Node.js ${{ matrix.node-version }}
+            uses: actions/setup-node@v2
+            with:
+              node-version: ${{ matrix.node-version }}
+              cache: 'npm'
+          - run: yarn ci
+          - run: yarn build --if-present
+          - run: yarn test
+
+    lint:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v2
+        - name: Linter
+          uses: yarn lint
+
+    code-coverage:
+      runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v2
+
+        - name: Set up Vue
+          uses: actions/setup-vue@v2
+
+        - name: Code coverage
+          run: |
+            export COVERAGE_THRESHOLD=80
+            go test -race -coverprofile=coverage.out -covermode=atomic ./...
+            coverage=$(go tool cover -func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
+            if [ 1 -eq "$(echo "${coverage} < ${COVERAGE_THRESHOLD}" | bc)" ]
+            then
+              echo "Insufficient test coverage, threshold=${COVERAGE_THRESHOLD}, coverage= ${coverage}"
+              exit 1
+            fi
